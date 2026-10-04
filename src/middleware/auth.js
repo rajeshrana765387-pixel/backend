@@ -9,7 +9,8 @@ const authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const jwtSecret = process.env.JWT_SECRET || 'fallback_production_secret_key_change_me';
+    const decoded = jwt.verify(token, jwtSecret);
 
     const result = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [decoded.id]);
     if (result.rows.length === 0) {

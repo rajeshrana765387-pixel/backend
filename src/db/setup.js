@@ -1,8 +1,10 @@
 const pool = require('./pool');
+const bcrypt = require('bcryptjs');
 
-const setupDatabase = async () => {
+const setupDatabase = async (closePoolOnFinish = true) => {
   const client = await pool.connect();
   try {
+    console.log('🔄 Setting up database tables and schemas...');
     await client.query('BEGIN');
 
     // Create enum for user roles
@@ -92,32 +94,42 @@ const setupDatabase = async () => {
         EXECUTE FUNCTION update_updated_at_column();
     `);
 
-    // Seed a default admin user (password: Admin@1234)
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash('Admin@1234', 10);
+    // Seed default admin user (password: Admin@1234)
+    const adminEmail = process.env.ADMIN_DEFAULT_EMAIL || 'admin@storerating.com';
+    const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'Admin@1234';
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
     await client.query(`
       INSERT INTO users (name, email, password, address, role)
       VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (email) DO NOTHING;
     `, [
       'System Administrator Account',
-      'admin@storerating.com',
+      adminEmail,
       hashedPassword,
-      '123 Admin Street, Admin City, Admin State 12345',
+      '123 Admin Headquarters, Main Commercial Avenue',
       'admin'
     ]);
 
     await client.query('COMMIT');
-    console.log('Database setup completed successfully!');
-    console.log('Default admin: admin@storerating.com / Admin@1234');
+    console.log('✅ Database setup completed successfully!');
+    console.log(`ℹ️ Default admin email: ${adminEmail}`);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Database setup failed:', err);
+    console.error('❌ Database setup failed:', err.message);
     throw err;
   } finally {
     client.release();
-    await pool.end();
+    if (closePoolOnFinish) {
+      await pool.end();
+    }
   }
 };
 
-setupDatabase().catch(console.error);
+if (require.main === module) {
+  setupDatabase(true).catch(() => {
+    process.exit(1);
+  });
+}
+
+module.exports = { setupDatabase };

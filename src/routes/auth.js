@@ -27,8 +27,10 @@ router.post('/register', registerValidators, async (req, res, next) => {
     );
 
     const user = result.rows[0];
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN,
+    const jwtSecret = process.env.JWT_SECRET || 'fallback_production_secret_key_change_me';
+    const jwtExpires = process.env.JWT_EXPIRES_IN || '7d';
+    const token = jwt.sign({ id: user.id, role: user.role }, jwtSecret, {
+      expiresIn: jwtExpires,
     });
 
     res.status(201).json({ message: 'Registration successful', token, user });
@@ -58,8 +60,10 @@ router.post('/login', loginValidators, async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN,
+    const jwtSecret = process.env.JWT_SECRET || 'fallback_production_secret_key_change_me';
+    const jwtExpires = process.env.JWT_EXPIRES_IN || '7d';
+    const token = jwt.sign({ id: user.id, role: user.role }, jwtSecret, {
+      expiresIn: jwtExpires,
     });
 
     const { password: _, ...userWithoutPassword } = user;
