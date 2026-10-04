@@ -94,26 +94,93 @@ const setupDatabase = async (closePoolOnFinish = true) => {
         EXECUTE FUNCTION update_updated_at_column();
     `);
 
-    // Seed default admin user (password: Admin@1234)
+    // 1. Seed Admin User (Admin@1234)
     const adminEmail = process.env.ADMIN_DEFAULT_EMAIL || 'admin@storerating.com';
     const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'Admin@1234';
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
-
+    const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
     await client.query(`
       INSERT INTO users (name, email, password, address, role)
       VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (email) DO NOTHING;
+      ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password;
     `, [
       'System Administrator Account',
       adminEmail,
-      hashedPassword,
+      hashedAdminPassword,
       '123 Admin Headquarters, Main Commercial Avenue',
       'admin'
     ]);
 
+    // 2. Seed Store Owner User (Owner@1234)
+    const ownerEmail = 'owner@storerating.com';
+    const hashedOwnerPassword = await bcrypt.hash('Owner@1234', 10);
+    const ownerRes = await client.query(`
+      INSERT INTO users (name, email, password, address, role)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password
+      RETURNING id;
+    `, [
+      'Store Owner Retail Manager',
+      ownerEmail,
+      hashedOwnerPassword,
+      '456 Retail Boulevard, Market Complex Suite 200',
+      'store_owner'
+    ]);
+    const ownerId = ownerRes.rows[0].id;
+
+    // 3. Seed Normal User (User@1234)
+    const userEmail = 'user@storerating.com';
+    const hashedUserPassword = await bcrypt.hash('User@1234', 10);
+    const userRes = await client.query(`
+      INSERT INTO users (name, email, password, address, role)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password
+      RETURNING id;
+    `, [
+      'Sample Platform Customer User',
+      userEmail,
+      hashedUserPassword,
+      '789 Customer Residency Lane, Apartment 4B',
+      'user'
+    ]);
+    const customerId = userRes.rows[0].id;
+
+    // 4. Seed sample stores
+    const storeRes = await client.query(`
+      INSERT INTO stores (name, email, address, owner_id)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (email) DO UPDATE SET owner_id = EXCLUDED.owner_id
+      RETURNING id;
+    `, [
+      'Grand Central Supermarket Store',
+      'grandcentral@storemail.com',
+      '100 Main Commercial Plaza, Downtown Center',
+      ownerId
+    ]);
+    const storeId = storeRes.rows[0].id;
+
+    await client.query(`
+      INSERT INTO stores (name, email, address, owner_id)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (email) DO NOTHING;
+    `, [
+      'Green Valley Organic Groceries',
+      'greenvalley@storemail.com',
+      '220 Eco Garden Highway, North District',
+      null
+    ]);
+
+    // 5. Seed sample rating
+    await client.query(`
+      INSERT INTO ratings (store_id, user_id, rating)
+      VALUES ($1, $2, 5)
+      ON CONFLICT (store_id, user_id) DO UPDATE SET rating = 5;
+    `, [storeId, customerId]);
+
     await client.query('COMMIT');
     console.log('✅ Database setup completed successfully!');
-    console.log(`ℹ️ Default admin email: ${adminEmail}`);
+    console.log(`ℹ️ Admin Account: ${adminEmail} / ${adminPassword}`);
+    console.log(`ℹ️ Store Owner: ${ownerEmail} / Owner@1234`);
+    console.log(`ℹ️ Normal User: ${userEmail} / User@1234`);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('❌ Database setup failed:', err.message);
